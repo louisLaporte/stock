@@ -14,8 +14,8 @@ from bokeh.models.widgets import (Select, Slider, TextInput, RangeSlider, Div,
                                   CheckboxGroup, DataTable, DateFormatter, TableColumn,
                                   Panel, Tabs)
 
-from bokeh.models.widgets.inputs import DateRangeSlider
-from bokeh.client import push_session
+# from bokeh.models.widgets.inputs import DateRangeSlider
+# from bokeh.client import push_session
 import random
 import quandl
 with open('secret/quandl_key', 'r') as f:
@@ -206,46 +206,4 @@ def MainWindow():
 # stream some data
     return tabs
 
-
-p = figure(plot_width=400, plot_height=400)
-r1 = p.line([], [], color="firebrick", line_width=2)
-r2 = p.line([], [], color="navy", line_width=2)
-
-ds1 = r1.data_source
-ds2 = r2.data_source
-p.xaxis.visible = False
-
-
-p2 = figure(plot_width=400, plot_height=400)
-r3 = p2.line([], [], color="firebrick", line_width=2)
-r4 = p2.line([], [], color="navy", line_width=2)
-
-ds3 = r3.data_source
-ds4 = r4.data_source
-
-
-@linear()
-def update(step):
-    ds1.data['x'].append(step)
-    ds1.data['y'].append(random.randint(0, 100))
-    ds2.data['x'].append(step)
-    ds2.data['y'].append(random.randint(0, 100))
-    ds1.trigger('data', ds1.data, ds1.data)
-    ds2.trigger('data', ds2.data, ds2.data)
-
-    ds3.data['x'].append(step)
-    ds3.data['y'].append(random.randint(0, 100))
-    ds4.data['x'].append(step)
-    ds4.data['y'].append(random.randint(0, 100))
-    ds3.trigger('data', ds3.data, ds3.data)
-    ds4.trigger('data', ds4.data, ds4.data)
-
-
-grid_layout = gridplot(children=[[p], [p2]], sizing_mode='stretch_both', merge_tools=True)
-curdoc().add_root(grid_layout)
-
-# Add a periodic callback to be run every 500 milliseconds
-curdoc().add_periodic_callback(update, 500)
-
-
-# curdoc().add_root(MainWindow())
+curdoc().add_root(MainWindow())
