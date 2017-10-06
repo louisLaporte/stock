@@ -1,4 +1,4 @@
 # Run Application
 ```
-$ bokeh serve --show stock.py
+$ bokeh serve --show ui/stock.py
 ```
