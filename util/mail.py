@@ -34,7 +34,7 @@ except ImportError:
 
 # If modifying these scopes, delete your previously saved credentials
 SCOPES = 'https://mail.google.com/'
-CLIENT_SECRET_FILE = 'secret/gmail.json'
+CLIENT_SECRET_FILE = 'secret/gmail_key.json'
 APPLICATION_NAME = 'gmail_client'
 
 
