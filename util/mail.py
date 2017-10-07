@@ -215,7 +215,7 @@ def main():
                 <p>from gmail API</p>
             </body>"""
 
-    with open('secret/mail_list.json', 'r') as f:
+    with open('../secret/mail_list.json', 'r') as f:
         contacts = json.load(f)
 
     for contact in contacts["to"]:
