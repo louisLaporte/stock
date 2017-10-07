@@ -17,6 +17,9 @@ def get_ticker_stocks(ticker, start, end):
     :type start: str
     :param end: last date for stocks
     :type end: str
+    :return: ticker stocks between start and end
+    :rtype: pandas.DataFrame
+
     """
     return pd.DataFrame(quandl.get_table('WIKI/PRICES',
                                          ticker=ticker,
@@ -26,6 +29,8 @@ def get_ticker_stocks(ticker, start, end):
 def get_sp500_tickers():
     """
     List of the S&P500 companies from Wikipedia
+    :return: S&P500 by sectors
+    :rtype: dict
     """
     site = "http://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
     req = urllib.request.Request(site)
