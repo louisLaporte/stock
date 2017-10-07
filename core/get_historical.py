@@ -15,4 +15,3 @@ def get_historical(ticker):
         os.remove(filename)
     df = pd.DataFrame(ticker_data)
     df.to_csv(filename)
-    return
