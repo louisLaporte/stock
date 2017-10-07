@@ -13,33 +13,18 @@ from bokeh.models import HoverTool
 from bokeh.models.widgets import (Select, Slider, TextInput, RangeSlider, Div,
                                   CheckboxGroup, DataTable, DateFormatter, TableColumn,
                                   Panel, Tabs)
-
+import core.market
 # from bokeh.models.widgets.inputs import DateRangeSlider
 # from bokeh.client import push_session
 import random
-import quandl
-with open('secret/quandl_key', 'r') as f:
-    api_key = f.readline().replace('\n', '')
-quandl.ApiConfig.api_key = api_key
-
-
 def datetime(x):
     return np.array(x, dtype=np.datetime64)
 
 
-def get_data(ticker, start, end):
-    return pd.DataFrame(
-        quandl.get_table(
-            'WIKI/PRICES', ticker=ticker,
-            date={'gte': start, 'lte': end}
-        )
-    )
-
-
 class Market():
-    ################################################################################
+    ###########################################################################
     # PLOT WIDGET
-    ################################################################################
+    ###########################################################################
     # +----------------------------+--------------+
     # |                            |              |
     # |          plot              |  checkbox    |
@@ -49,9 +34,10 @@ class Market():
     # | | start_btn | | end_btn  | |
     # | +-----------+ +----------+ |
     # +----------------------------+
-    ################################################################################
+    ###########################################################################
 
-    def __init__(self, start='2014-01-01', end='2014-06-01', tickers=['AAPL']):
+    def __init__(self, start='2014-01-01', end='2014-06-01',
+                 tickers=core.market.get_sp500_tickers()['industrials']):
         super().__init__()
         self.start = start
         self.end = end
@@ -93,7 +79,7 @@ class Market():
         self.df.index.names = [c.lower().replace(' ', '_') for c in self.df.index.names]
 
     def candle_plot(self, ticker, index_name='date'):
-        self.df = get_data(ticker, self.start, self.end)
+        self.df = core.market.get_ticker_stocks(ticker, self.start, self.end)
 
         self.normalize_name()
         self.df = self.df.set_index(index_name)
@@ -106,25 +92,18 @@ class Market():
 
         source = ColumnDataSource(data=dict(data))
 #
-        hover = HoverTool(
-            tooltips=[
-                ('date',      '@date{%F}'),
-                ('adj close', '$@adj_close{%0.2f}'),  # use @{ } for field names with spaces
-                ('adj open',  '$@adj_open{%0.2f}'),  # use @{ } for field names with spaces
-                ('volume',    '@volume{0.00 a}'),
-                ('open',      '@open{%0.2f}'),
-                ('close',     '@close{%0.2f}'),
-            ],
-            formatters={
-                'date': 'datetime',  # use 'datetime' formatter for 'date' field
-                'adj_close': 'printf',  # use 'printf' formatter for 'adj close' field
-                'adj_open': 'printf',  # use 'printf' formatter for 'adj close' field
-                'open': 'printf',  # use 'printf' formatter for 'adj close' field
-                'close': 'printf',  # use 'printf' formatter for 'adj close' field
-            },
-            # display a tooltip whenever the cursor is vertically in line with a glyph
-            mode='vline'
-        )
+        hover = HoverTool(tooltips=[('date', '@date{%F}'),
+                                    ('adj close', '$@adj_close{%0.2f}'),
+                                    ('adj open', '$@adj_open{%0.2f}'),
+                                    ('volume', '@volume{0.00 a}'),
+                                    ('open', '@open{%0.2f}'),
+                                    ('close', '@close{%0.2f}')],
+                          formatters={'date': 'datetime',
+                                      'adj_close': 'printf',
+                                      'adj_open': 'printf',
+                                      'open': 'printf',
+                                      'close': 'printf'},
+                          mode='vline')
         inc = self.df['close'] > self.df['open']
         dec = self.df['open'] > self.df['close']
         w = 12 * 60 * 60 * 1000  # half day in ms
@@ -139,14 +118,10 @@ class Market():
         p.line(index_name, 'adj_open', color='#FB9A99', source=source)
         p.segment(index_name, 'high', index_name, 'low', color="white", source=source)
 
-        p.vbar(
-            index[inc], w, self.df['open'][inc], self.df['close'][inc],
-            fill_color="#D5E1DD", line_color="white"
-        )
-        p.vbar(
-            index[dec], w, self.df['open'][dec], self.df['close'][dec],
-            fill_color="#F2583E", line_color="white"
-        )
+        p.vbar(index[inc], w, self.df['open'][inc], self.df['close'][inc],
+               fill_color="#D5E1DD", line_color="white")
+        p.vbar(index[dec], w, self.df['open'][dec], self.df['close'][dec],
+               fill_color="#F2583E", line_color="white")
         p.legend.location = "top_left"
         p.background_fill_color = "black"
         columns = [
@@ -199,7 +174,7 @@ class Market():
 
 def MainWindow():
     companies = ['AAPL', 'IBM', 'GOOGL', 'MSFT']
-    market = Market(tickers=companies)
+    market = Market()
     tab1 = Panel(child=market.widget(), title="Market")
     # tab2 = Panel(title="live", child=layout([l]))
     tabs = Tabs(tabs=[tab1])  # , tab2 ])

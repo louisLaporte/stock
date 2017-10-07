@@ -1,0 +1,5 @@
+bokeh
+quandl
+pandas
+beautifulsoup4
+apiclient
