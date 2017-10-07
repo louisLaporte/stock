@@ -14,7 +14,7 @@ from bokeh.models.widgets import (Select, Slider, TextInput, RangeSlider, Div,
                                   CheckboxGroup, DataTable, DateFormatter, TableColumn,
                                   Panel, Tabs)
 import core.market
-# from bokeh.models.widgets.inputs import DateRangeSlider
+from bokeh.models.widgets.sliders import DateRangeSlider
 # from bokeh.client import push_session
 import random
 def datetime(x):
@@ -41,11 +41,9 @@ class Market():
         super().__init__()
         self.start = start
         self.end = end
-        self.select_tick_btn = Select(
-            title="Company tick",
-            value=tickers[0],
-            options=tickers
-        )
+        self.select_tick_btn = Select(title="Company tick",
+                                      value=tickers[0],
+                                      options=tickers)
         self.debug = Div(text="""Some text""", width=200, height=100)
 
         # /!\ not working: wait for bokeh master release 12.7
@@ -66,10 +64,20 @@ class Market():
         self.start_date_input.on_change("value", self.on_start_date_input_change)
         self.end_date_input.on_change("value", self.on_end_date_input_change)
         self.select_tick_btn.on_change('value', self.on_tick_selection_change)
-        self.main_layout = layout([
-            [self.select_tick_btn, self.start_date_input, self.end_date_input],
-            [self.plot_layout],
-        ])
+        self.date_slider = DateRangeSlider(value=(self.start, self.end), start=self.start, end=self.end)
+        self.date_slider.on_change('value', self.date_range_update)
+        self.main_layout = layout([[self.select_tick_btn,
+                                    self.start_date_input,
+                                    self.end_date_input,
+                                    self.date_slider],
+                                   [self.plot_layout]])
+    def date_range_update(self, attrname, old, new):
+        print('-- range values:', self.date_slider.value)
+        # Works
+        # d1 = datetime.fromtimestamp(self.date_slider.value[0])
+        # # Does not Work, gives error
+        # d2 = datetime.fromtimestamp(date_slider.value[0])
+
 
     def widget(self):
         return self.main_layout
