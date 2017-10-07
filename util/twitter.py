@@ -13,6 +13,12 @@ import operator
 class Twitter:
 
     def __init__(self, name, count=1):
+        """
+        Twitter class consttuctor
+
+        :param name: Account name
+        :type name: str
+        """
         with open("../secret/twitter_key.json") as json_file:
             data = json.load(json_file)
 
@@ -25,98 +31,123 @@ class Twitter:
         auth.set_access_token(access_token_key, access_token_secret)
         self.api = tweepy.API(auth)
 
-        self.c = count
-        self.u = self.api.get_user(screen_name=name)
+        self.user = self.api.get_user(screen_name=name)
 
-        self.d = {}
-        self.d["name"] = self.u.name
-        self.d["user_id"] = self.u.id_str
-        self.d["description"] = self.u.description
-        self.d["lang"] = self.u.lang
-        self.d["account_created_at"] = self.u.created_at
-        self.d["location"] = self.u.location
-        self.d["time_zone"] = self.u.time_zone
-        self.d["number_tweets"] = self.u.statuses_count
-        self.d["number_followers"] = self.u.followers_count
-        self.d["following"] = self.u.friends_count
-        self.d["member_of"] = self.u.listed_count
-        self.d["location"] = self.u.location
-        self.d["tweet"] = {}
+        self.account = {}
+        self.account["name"] = self.user.name
+        self.account["user_id"] = self.user.id_str
+        self.account["description"] = self.user.description
+        self.account["lang"] = self.user.lang
+        self.account["account_created_at"] = self.user.created_at
+        self.account["location"] = self.user.location
+        self.account["time_zone"] = self.user.time_zone
+        self.account["number_tweets"] = self.user.statuses_count
+        self.account["number_followers"] = self.user.followers_count
+        self.account["following"] = self.user.friends_count
+        self.account["member_of"] = self.user.listed_count
+        self.account["location"] = self.user.location
+        self.account["tweet"] = {}
 
     def info(self):
-        print(self.d["name"])
-        print("Location: " + self.d["location"])
-        print("Time zone: " + self.d["time_zone"])
-        print("Number of tweets: " + str(self.d["member_tweets"]))
+        """
+        Print account info
+        """
+        print(self.account["name"])
+        print("Location: " + self.account["location"])
+        print("Time zone: " + self.account["time_zone"])
+        print("Number of tweets: " + str(self.account["member_tweets"]))
 
-    def extract(self, sentence):
+    def extract(self, tweet):
         """
-        extracting list of hashtag, at and url
+        Extracting hashtag, at and url from tweet
+
+        :param tweet: tweet message
+        :type tweet: str
+        :return: hashtag, at and url
+        :rtype: tuple
         """
-        h_list, a_list, u_list = [], [], []
-        for s in list(sentence):
+        hashtag_list, at_list, url_list = [], [], []
+        for s in list(tweet):
             if re.match('#.*', s):
-                h_list.append(s)
+                hashtag_list.append(s)
             elif re.match('@.*', s):
-                a_list.append(s)
+                at_list.append(s)
             elif re.match('http.*', s):
-                u_list.append(s)
-        return (h_list, a_list, u_list)
+                url_list.append(s)
+        return (hashtag_list, at_list, url_list)
 
-    def normalize(self, sentence):
+    def normalize(self, tweet):
+        """
+        Remove url punctuation, url and @ from tweet
+
+        :param tweet: tweet message
+        :type tweet: str
+        :return: clean up tweet message
+        :rtype: str
+        """
         # TODO use beautifulsoup to convert html special char
         # http://stackoverflow.com/questions/2087370/decode-html-entities-in-python-string
-        """
-        - remove url and @
-        - remove punctuation
-        """
-        for s in list(sentence):
+        for s in list(tweet):
             if re.match('@.*', s):
-                sentence.remove(s)
+                tweet.remove(s)
             elif re.match('http.*', s):
-                sentence.remove(s)
+                tweet.remove(s)
             elif re.match('&.*', s):
-                sentence.remove(s)
+                tweet.remove(s)
             elif s == 'cc':
-                sentence.remove(s)
-        sentence_norm = [''.join(c for c in s if c not in string.punctuation)
-                         for s in sentence]
+                tweet.remove(s)
+        tweet_norm = [''.join(c for c in s if c not in string.punctuation)
+                      for s in tweet]
         # remove blank in array
-        sentence_norm = [s for s in sentence_norm if s]
-        return sentence_norm
+        tweet_norm = [s for s in tweet_norm if s]
+        return tweet_norm
 
-    def run(self):
-        statuses = self.api.user_timeline(id=self.u.id, count=self.c)
-        counts = Counter()
-        for status in statuses:
-            self.d["tweet"]["id"] = status.id_str
-            self.d["tweet"]["retweet_count"] = status.retweet_count
-            self.d["tweet"]["favorite_count"] = status.favorite_count
-            self.d["tweet"]["created_at"] = status.created_at
-            self.d["tweet"]["place"] = status.place
-            self.d["tweet"]["source"] = status.source
-            self.d["tweet"]["coordinates"] = status.coordinates
-            self.d["tweet"]["content"] = {}
-            self.d["tweet"]["content"]["text"] = status.text
-            tw = status.text
-            tw_list = str(status.text).split()
-            self.extract(tw)
-            (self.d["tweet"]["content"]["hashtag"],
-             self.d["tweet"]["content"]["at"],
-             self.d["tweet"]["content"]["url"]) = self.extract(tw_list)
-            tw_norm = self.normalize(tw_list)
-            tw_norm_tolower = [x.lower() for x in tw_norm]
-            for words in tw_norm_tolower:
+    def get_tweet_info(self, tweet):
+        """
+        Save tweet info
+
+        :param tweet: tweet message
+        :type tweet: str
+        """
+        self.account["tweet"]["id"] = tweet.id_str
+        self.account["tweet"]["retweet_count"] = tweet.retweet_count
+        self.account["tweet"]["favorite_count"] = tweet.favorite_count
+        self.account["tweet"]["created_at"] = tweet.created_at
+        self.account["tweet"]["place"] = tweet.place
+        self.account["tweet"]["source"] = tweet.source
+        self.account["tweet"]["coordinates"] = tweet.coordinates
+        self.account["tweet"]["content"] = {}
+        self.account["tweet"]["content"]["text"] = tweet.text
+        tw_list = str(tweet.text).split()
+        (self.account["tweet"]["content"]["hashtag"],
+         self.account["tweet"]["content"]["at"],
+         self.account["tweet"]["content"]["url"]) = self.extract(tw_list)
+        return self.account
+
+    def get_company_letter_percentage(self, count):
+        """
+        Get percentage of letter in a company's tweets
+
+        :param count: number of tweets to retrieve
+        :type count: int
+        """
+        tweets = self.api.user_timeline(id=self.user.id, count=count)
+        count_letter = Counter()
+        for tweet in tweets:
+            lower_tweet = [x.lower() for x in self.normalize(tweet.text.split())]
+            for words in lower_tweet:
                 for letters in set(words):
-                    counts[letters] += 1
+                    count_letter[letters] += 1
 
-        counts = sorted(counts.items(), key=operator.itemgetter(1), reverse=True)
+        count_letter = sorted(count_letter.items(),
+                              key=operator.itemgetter(1),
+                              reverse=True)
         tot = 0
-        for k, v in counts:
+        for k, v in count_letter:
             if not re.match('\W+', k):
                 tot += v
 
-        for k, v in counts:
+        for k, v in count_letter:
             if not re.match('\W+', k):
                 print("{:<10}{:.2f}%".format(k, 100 * v / tot))
 
