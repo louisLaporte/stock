@@ -21,7 +21,7 @@ class SP500:
         soup = bs4.BeautifulSoup(resp.text, 'lxml')
         table = soup.find('table', {'class': 'wikitable sortable'})
         tickers = []
-        header = ["Ticker", "Security Name", "GICS Sector", "GICS Subsector",
+        header = ["Symbol", "Security Name", "GICS Sector", "GICS Subsector",
                   "HQ Address", "Date Added", "CIK"]
 
         for row in table.findAll('tr')[1:]:
@@ -37,7 +37,7 @@ class SP500:
         :return: list of unique sectors
         :rtype: list
         """
-        return self.df["GICS Sector"].unique()
+        return self.df["GICS Sector"].unique().tolist()
 
     def get_tickers_by_sectors(self, sectors):
         """
@@ -53,6 +53,15 @@ class SP500:
         if len(set(sectors) & set(self.get_sectors())) != len(sectors):
             raise ValueError("Unknown sectors: {}".format(sectors))
         return self.df[self.df["GICS Sector"].isin(sectors)]
+
+    def get_tickers_symbol(self):
+        """
+        Get list of tickers symbol
+
+        :return: list of unique sectors
+        :rtype: list
+        """
+        return self.df["Symbol"].tolist()
 
     @staticmethod
     def get_ticker_stocks(ticker, start, end):

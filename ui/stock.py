@@ -34,17 +34,18 @@ class Market():
 
     def __init__(self,
                  start=(date.today() - relativedelta(years=3)),
-                 end=date.today(),
-                 tickers=core.market.get_sp500_tickers()['industrials']):
+                 end=date.today()):
         self.start = str(start)
         self.end = str(end)
+        self.sp500 = core.market.SP500()
+        self.symbols = self.sp500.get_tickers_symbol()
         self.select_tick_btn = Select(title="Company tick",
-                                      value=tickers[0],
-                                      options=tickers)
+                                      value=self.symbols[0],
+                                      options=self.symbols)
         self.start_date_input = TextInput(value=self.start, title='start')
         self.end_date_input = TextInput(value=self.end, title='end')
         # layout
-        self.plot_layout = self.candle_plot(tickers[0])
+        self.plot_layout = self.candle_plot(self.symbols[0])
 
         self.start_date_input.on_change('value', self.on_start_date_input_change)
         self.end_date_input.on_change('value', self.on_end_date_input_change)
@@ -59,8 +60,7 @@ class Market():
         self.df.index.names = [c.lower().replace(' ', '_') for c in self.df.index.names]
 
     def candle_plot(self, ticker, index_name='date'):
-        self.df = core.market.get_ticker_stocks(ticker, self.start, self.end)
-
+        self.df = self.sp500.get_ticker_stocks(ticker, self.start, self.end)
         self.normalize_name()
         self.df = self.df.set_index(index_name)
         index = self.df.index.get_level_values(index_name)
