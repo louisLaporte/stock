@@ -4,59 +4,81 @@ import quandl
 import pandas as pd
 import requests
 
-with open('secret/quandl_key', 'r') as f:
-    api_key = f.readline().replace('\n', '')
-quandl.ApiConfig.api_key = api_key
 
+class SP500:
 
-def get_ticker_stocks(ticker, start, end):
-    """
-    Get stocks for the given ticker from start date to end date
+    def __init__(self):
+        """
+        Construtor for SP500
 
-    :param ticker: ticker name
-    :type ticker: str
-    :param start: first date for stocks
-    :type start: str
-    :param end: last date for stocks
-    :type end: str
-    :return: ticker stocks between start and end
-    :rtype: pandas.DataFrame
-    """
-    return pd.DataFrame(quandl.get_table('WIKI/PRICES',
-                                         ticker=ticker,
-                                         date={'gte': start, 'lte': end}))
+        Retrieve S&P500's tickers info from wikipedia
+        """
+        with open('secret/quandl_key', 'r') as f:
+            api_key = f.readline().replace('\n', '')
+        quandl.ApiConfig.api_key = api_key
+        resp = requests.get('http://en.wikipedia.org/wiki/List_of_S%26P_500_companies')
+        resp.raise_for_status()
+        soup = bs4.BeautifulSoup(resp.text, 'lxml')
+        table = soup.find('table', {'class': 'wikitable sortable'})
+        tickers = []
+        header = ["Ticker", "Security Name", "GICS Sector", "GICS Subsector",
+                  "HQ Address", "Date Added", "CIK"]
 
+        for row in table.findAll('tr')[1:]:
+            ticker = [h.text for h in row.findAll('td') if h.text != 'reports']
+            tickers.append(ticker)
 
-def get_sp500_tickers():
-    """
-    Retrieve S&P500's tickers info from wikipedia
+        self.df = pd.DataFrame(tickers, columns=header)
 
-    :return: Array of tickers
-    :rtype: pandas.DataFrame
-    """
-    resp = requests.get('http://en.wikipedia.org/wiki/List_of_S%26P_500_companies')
-    resp.raise_for_status()
-    soup = bs4.BeautifulSoup(resp.text, 'lxml')
-    table = soup.find('table', {'class': 'wikitable sortable'})
-    tickers = []
-    header = ["Ticker", "Security Name", "GICS Sector", "GICS Subsector",
-              "HQ Address", "Date Added", "CIK"]
+    def get_sectors(self):
+        """
+        Get list of sectors
 
-    for row in table.findAll('tr')[1:]:
-        ticker = [h.text for h in row.findAll('td') if h.text != 'reports']
-        tickers.append(ticker)
+        :return: list of unique sectors
+        :rtype: list
+        """
+        return self.df["GICS Sector"].unique()
 
-    return pd.DataFrame(tickers, columns=header)
+    def get_tickers_by_sectors(self, sectors):
+        """
+        Get tickers table by sectors
 
+        :param sectors: GCIS sectors
+        :type sectors: list
+        :return: a table of tickers by selected sectors
+        :rtype: pandas.DataFrame
+        """
+        if not isinstance(sectors, list):
+            raise TypeError("Sectors must be a list")
+        if len(set(sectors) & set(self.get_sectors())) != len(sectors):
+            raise ValueError("Unknown sectors: {}".format(sectors))
+        return self.df[self.df["GICS Sector"].isin(sectors)]
 
-def save_sp500_tickers(fname="sp500.csv"):
-    """
-    Save S&P500's tickers info
+    @staticmethod
+    def get_ticker_stocks(ticker, start, end):
+        """
+        Get stocks for the given ticker from start date to end date
 
-    :param fname: File to store info
-    :type fname: str
-    """
-    if not fname:
-        raise ValueError("File name is empty.")
-    tickers = get_sp500_tickers()
-    tickers.to_csv(fname, header=tickers.columns.values.tolist(), index=False)
+        :param ticker: ticker name
+        :type ticker: str
+        :param start: first date for stocks
+        :type start: str
+        :param end: last date for stocks
+        :type end: str
+        :return: ticker stocks between start and end
+        :rtype: pandas.DataFrame
+        """
+        return pd.DataFrame(quandl.get_table('WIKI/PRICES',
+                                             ticker=ticker,
+                                             date={'gte': start, 'lte': end}))
+
+    def save_sp500_tickers(self, fname="sp500.csv"):
+        """
+        Save S&P500's tickers info
+
+        :param fname: File to store info
+        :type fname: str
+        """
+        if not fname:
+            raise ValueError("File name is empty.")
+        self.df.to_csv(fname, header=self.df.columns.values.tolist(), index=False)
