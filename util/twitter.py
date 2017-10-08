@@ -55,30 +55,32 @@ class Twitter:
         print(self.account["name"])
         print("Location: " + self.account["location"])
         print("Time zone: " + self.account["time_zone"])
-        print("Number of tweets: " + str(self.account["member_tweets"]))
+        print("Number of tweets: " + str(self.account["number_tweets"]))
 
     def extract(self, tweet):
         """
-        Extracting hashtag, at and url from tweet
+        Extracting hashtag, at, url and mail address from tweet
 
         :param tweet: tweet message
         :type tweet: str
         :return: hashtag, at and url
         :rtype: tuple
         """
-        hashtag_list, at_list, url_list = [], [], []
+        hashtag_list, mail_address_list, at_list, url_list = [], [], [], []
         for s in list(tweet):
-            if re.match('#.*', s):
+            if re.match('^#.*', s):
                 hashtag_list.append(s)
-            elif re.match('@.*', s):
+            elif re.match('^@.*', s):
                 at_list.append(s)
-            elif re.match('http.*', s):
+            elif re.match('.*@.*', s):
+                mail_address_list.append(s)
+            elif re.match('^http.*', s):
                 url_list.append(s)
-        return (hashtag_list, at_list, url_list)
+        return (hashtag_list, mail_address_list, at_list, url_list)
 
     def normalize(self, tweet):
         """
-        Remove url punctuation, url and @ from tweet
+        Remove url punctuation, url and , mail address from tweet
 
         :param tweet: tweet message
         :type tweet: str
@@ -88,9 +90,13 @@ class Twitter:
         # TODO use beautifulsoup to convert html special char
         # http://stackoverflow.com/questions/2087370/decode-html-entities-in-python-string
         for s in list(tweet):
-            if re.match('@.*', s):
+            if re.match('^@.*', s):
                 tweet.remove(s)
-            elif re.match('http.*', s):
+            elif re.match('.*@.*', s):
+                tweet.remove(s)
+            elif re.match('^#.*', s):
+                tweet.remove(s)
+            elif re.match('^http.*', s):
                 tweet.remove(s)
             elif re.match('&.*', s):
                 tweet.remove(s)
@@ -134,7 +140,9 @@ class Twitter:
         tweets = self.api.user_timeline(id=self.user.id, count=count)
         count_letter = Counter()
         for tweet in tweets:
+            print(tweet.text)
             lower_tweet = [x.lower() for x in self.normalize(tweet.text.split())]
+            print(lower_tweet)
             for words in lower_tweet:
                 for letters in set(words):
                     count_letter[letters] += 1
