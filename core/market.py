@@ -2,13 +2,10 @@
 import bs4
 import quandl
 import pandas as pd
-import numpy as np
 import requests
-import urllib
-import ssl
-import re
 import os
 import logging
+from scrapy.selector import Selector
 
 
 class SP500:
@@ -67,7 +64,25 @@ class SP500:
         self.tickers_store['default'] = tickers_df
         self.tickers_store['wikipedia'] = wikipedia_df
 
+    def get_website(self, symbol):
+        """
+        Get ticker's website
+
+        :param symbol: ticker symbol
+        :type symbol: str
+        :return: website for the given symbol
+        :rtype: str
+        """
+        tsw = self.tickers_store['website']
+        return tsw[tsw['symbol'] == symbol].loc[0]["link"]
+
+    def update_websites(self):
+        raise NotImplementedError
+
     def save_websites(self):
+        """
+        Save websites url in hdf5 database
+        """
         wiki_df = self.tickers_store['wikipedia']
         header = ["symbol", "link"]
         websites = []
@@ -94,50 +109,39 @@ class SP500:
         self.tickers_store['website'] = website_df
         print("Website error for symbols: {}".format(error_symbol))
 
-    def update_data(self):
-        return
+    def get_social_account(self, symbol, social_name):
+        tsw = self.tickers_store['social']
+        return tsw[tsw['symbol'] == symbol].loc[0]["twitter_account"]
 
-    def get_website(self, symbol):
-        return
+    def update_social_accounts(self):
+        raise NotImplementedError
 
     def save_social_accounts(self):
+        """
+        Save social accounts names in hdf5 database
+        """
         website_df = self.tickers_store['website']
         header = ["symbol", "twitter_account"]
         accounts = []
         error_symbol = []
         for idx, row in website_df.iterrows():
             print(row['link'])
-            if row['link'] in ["http://www.carmax.com/", "http://www.cinfin.com",
-                               "http://www.humana.com/", "http://www.kohls.com/",
-                               "http://michaelkors.com", "http://www.bestbuy.com/",
-                               "http://www.footlocker.com", "http://www.oreillyauto.com"]:
-                continue
             try:
-                # req = urllib.request.Request(
-                #     website,
-                # soup = bs4.BeautifulSoup(
-                #     urllib.request.urlopen(req,
-                #                            context=ssl.create_default_context(
-                #                                ssl.Purpose.CLIENT_AUTH)),
-                #     'lxml')
                 headers = {'User-Agent': "Mozilla/5.0 (Windows NT 6.1) \
                 AppleWebKit/537.36 (KHTML, like Gecko) Chrome/41.0.2228.0 Safari/537.36"}
-                resp = requests.get(row['link'], verify=True, headers=headers)
+                resp = requests.get(row['link'], verify=True, headers=headers, timeout=15)
                 resp.raise_for_status()
-                soup = bs4.BeautifulSoup(resp.text, 'lxml')
-
-                social = soup.select("a[href*=twitter]")  # .a.get('href')
-                for s in social:
-                    m = re.match('.*twitter.com/(#!/)?(@)?\w+$', s.get('href'))
-                    if m:
-                        account = s.get('href').split('/')[-1]
-                        print(row['symbol'], account)
-                        accounts.append([row['symbol'], account])
-                        break
+                response = Selector(text=resp.text, type='html')
+                account = response.xpath('//a[re:test(@href, ".*twitter.com/(#!/)?(@)?\w+$")]//@href').extract_first()
+                if account:
+                    accounts.append(account)
             except Exception as err:
                 print(err)
                 error_symbol.append(row['symbol'])
                 continue
+        print(len(accounts))
+        for account in accounts:
+            print(account)
         social_df = pd.DataFrame(accounts, columns=header)
         self.tickers_store['social'] = social_df
         print("Website error for symbols: {}".format(error_symbol))
@@ -149,7 +153,7 @@ class SP500:
         :return: list of unique sectors
         :rtype: list
         """
-        return self.tickers["GICS Sector"].unique().tolist()
+        return self.tickers_store['default']["gics_sector"].unique().tolist()
 
     def get_tickers_by_sectors(self, sectors):
         """
@@ -164,7 +168,8 @@ class SP500:
             raise TypeError("Sectors must be a list")
         if len(set(sectors) & set(self.get_sectors())) != len(sectors):
             raise ValueError("Unknown sectors: {}".format(sectors))
-        return self.tickers[self.tickers["GICS Sector"].isin(sectors)]
+        tst = self.tickers_store['default']
+        return tst[tst["gics_sector"].isin(sectors)]
 
     def get_tickers_symbol(self):
         """
@@ -173,7 +178,7 @@ class SP500:
         :return: list of unique sectors
         :rtype: list
         """
-        return self.tickers["Symbol"].tolist()
+        return self.tickers_store["default"]["symbol"].tolist()
 
     @staticmethod
     def get_ticker_stocks(ticker, start, end):
@@ -192,14 +197,3 @@ class SP500:
         return pd.DataFrame(quandl.get_table('WIKI/PRICES',
                                              ticker=ticker,
                                              date={'gte': start, 'lte': end}))
-
-    def save_sp500_tickers(self, fname="sp500.csv"):
-        """
-        Save S&P500's tickers info
-
-        :param fname: File to store info
-        :type fname: str
-        """
-        if not fname:
-            raise ValueError("File name is empty.")
-        self.tickers.to_csv(fname, header=self.df.columns.values.tolist(), index=False)
