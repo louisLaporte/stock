@@ -22,6 +22,7 @@ class SP500:
         else:
             self.tickers_store = pd.HDFStore(store_file, mode='r+')
         print(self.tickers_store.keys())
+        print(self.tickers_store)
 
         if '/default' not in self.tickers_store.keys():
             self.save_default_info()
