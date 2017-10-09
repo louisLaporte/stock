@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 from math import pi
 import numpy as np
+from datetime import date
+from dateutil.relativedelta import relativedelta
 from bokeh.layouts import layout, column
 from bokeh.plotting import figure, ColumnDataSource
 from bokeh.io import curdoc
 from bokeh.models import HoverTool
-
 from bokeh.models.widgets import (Select, TextInput, DataTable, DateFormatter,
                                   TableColumn, Panel, Tabs)
 import core.market
-from datetime import date
-from dateutil.relativedelta import relativedelta
+import util.twitter
 
 
 def datetime(x):
@@ -131,9 +131,18 @@ class Market():
         self.layout.children[1] = self.candle_plot(self.select_tick_btn.value)
 
 
+class Twitter:
+
+    def __init__(self,
+                 start=(date.today() - relativedelta(years=3)),
+                 end=date.today()):
+        self.twitter = util.twitter.Twitter()
+
+
 def MainWindow():
     tab1 = Panel(child=Market().layout, title="Market")
-    tabs = Tabs(tabs=[tab1])
+    tab2 = Panel(child=Market().layout, title="Twitter")
+    tabs = Tabs(tabs=[tab1, tab2])
     return tabs
 
 

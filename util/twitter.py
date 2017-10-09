@@ -12,14 +12,14 @@ import operator
 
 class Twitter:
 
-    def __init__(self, name, count=1):
+    def __init__(self, name, count=1, twitter_key='../secret/twitter_key.json'):
         """
         Twitter class consttuctor
 
         :param name: Account name
         :type name: str
         """
-        with open("../secret/twitter_key.json") as json_file:
+        with open(twitter_key) as json_file:
             data = json.load(json_file)
 
         access_token_key = data["ACCESS_TOKEN_KEY"]
