@@ -37,8 +37,9 @@ class Market():
                  end=date.today()):
         self.start = str(start)
         self.end = str(end)
-        self.sp500 = core.market.SP500()
-        self.symbols = self.sp500.get_tickers_symbol()
+        self.sp500 = core.market.SP500('dataset/tickers.h5')
+        self.symbols = self.sp500.tickers_store['default']['symbol'].values.tolist()
+        print(self.symbols)
         self.select_tick_btn = Select(title="Company tick",
                                       value=self.symbols[0],
                                       options=self.symbols)
