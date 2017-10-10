@@ -4,6 +4,7 @@ import quandl
 import pandas as pd
 import requests
 import os
+import json
 import logging
 from scrapy.selector import Selector
 
@@ -36,9 +37,9 @@ class SP500:
 
     @staticmethod
     def _load_quandl_api_key():
-        with open('secret/quandl_key', 'r') as f:
-            api_key = f.readline().replace('\n', '')
-        quandl.ApiConfig.api_key = api_key
+        with open('secret/quandl_key.json', 'r') as f:
+            api_key = json.load(f)
+        quandl.ApiConfig.api_key = api_key['key']
 
     def save_default_info(self):
         # Find S&P500 info from wikipedia
