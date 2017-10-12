@@ -8,18 +8,20 @@ import tweepy
 import string
 import json
 import operator
+import os
 
 
 class Twitter:
 
-    def __init__(self, name, count=1, twitter_key='../secret/twitter_key.json'):
+    def __init__(self, name, count=1):
         """
         Twitter class consttuctor
 
         :param name: Account name
         :type name: str
         """
-        with open(twitter_key) as json_file:
+        file_path = os.path.dirname(os.path.realpath(__file__))
+        with open(file_path + '/../secret/twitter_key.json') as json_file:
             data = json.load(json_file)
 
         access_token_key = data["ACCESS_TOKEN_KEY"]
@@ -48,14 +50,15 @@ class Twitter:
         self.account["location"] = self.user.location
         self.account["tweet"] = {}
 
+    def rate_limit_status(self):
+        return self.api.rate_limit_status()
+
     def info(self):
         """
         Print account info
         """
-        print(self.account["name"])
-        print("Location: " + self.account["location"])
-        print("Time zone: " + self.account["time_zone"])
-        print("Number of tweets: " + str(self.account["number_tweets"]))
+        print("Comapany:", self.account["name"])
+        print("Number of tweets:", self.user.statuses_count)
 
     def extract(self, tweet):
         """
@@ -130,6 +133,9 @@ class Twitter:
          self.account["tweet"]["content"]["url"]) = self.extract(tw_list)
         return self.account
 
+    def get_timeline(self, count):
+        return self.api.user_timeline(id=self.user.id, count=count)
+
     def get_company_letter_percentage(self, count):
         """
         Get percentage of letter in a company's tweets
@@ -137,7 +143,7 @@ class Twitter:
         :param count: number of tweets to retrieve
         :type count: int
         """
-        tweets = self.api.user_timeline(id=self.user.id, count=count)
+        tweets = self.get_timeline(count)
         count_letter = Counter()
         for tweet in tweets:
             print(tweet.text)
