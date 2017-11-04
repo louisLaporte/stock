@@ -9,5 +9,5 @@ BOKEH
 
 To run the user interface:
 ```
-$ bokeh serve --show ui/stock.py
+$ bokeh serve --show ui/
 ```
