@@ -1,20 +1,38 @@
 #!/usr/bin/env python3
 from math import pi
-import numpy as np
+import sys
+import os
+import logging
 from datetime import date
 from dateutil.relativedelta import relativedelta
 from bokeh.layouts import layout, column
 from bokeh.plotting import figure, ColumnDataSource
-from bokeh.io import curdoc
 from bokeh.models import HoverTool
-from bokeh.models.widgets import (Select, TextInput, DataTable, DateFormatter,
-                                  TableColumn, Panel, Tabs)
+from bokeh.models.widgets import (
+    Select,
+    TextInput,
+    DataTable,
+    DateFormatter,
+    TableColumn
+)
+
+project_path = os.path.realpath(os.path.dirname(__file__) + '/..')
+sys.path.append(project_path)
+
 import core.market
 import util.twitter
+import plot
+log = logging.getLogger(__name__)
+log.setLevel(logging.DEBUG)
 
-
-def datetime(x):
-    return np.array(x, dtype=np.datetime64)
+# create console handler and set level to debug
+ch = logging.StreamHandler()
+ch.setLevel(logging.INFO)
+formatter = logging.Formatter('[%(name)s][%(levelname)s]%(message)s')
+# add formatter to ch
+ch.setFormatter(formatter)
+# add ch to logger
+log.addHandler(ch)
 
 
 class Market():
@@ -38,37 +56,33 @@ class Market():
         self.start = str(start)
         self.end = str(end)
         self.sp500 = core.market.SP500('dataset/tickers.h5')
-        self.symbols = self.sp500.tickers_store['default']['symbol'].values.tolist()
-        print(self.symbols)
-        self.select_tick_btn = Select(title="Company tick",
-                                      value=self.symbols[0],
-                                      options=self.symbols)
-        self.start_date_input = TextInput(value=self.start, title='start')
-        self.end_date_input = TextInput(value=self.end, title='end')
+        symbols = self.sp500.tickers_store['default']['symbol'].values.tolist()
+        # log.info("{}".format(symbols))
+        # Select tick button
+        title = "Company tick"
+        self.select_tick = Select(title=title, value=symbols[0], options=symbols)
+        # Inputs buttons
+        self.start_date = TextInput(value=self.start, title='start')
+        self.end_date = TextInput(value=self.end, title='end')
         # layout
-        self.plot_layout = self.candle_plot(self.symbols[0])
+        self.plot_layout = self.candle_plot(symbols[0])
 
-        self.start_date_input.on_change('value', self.on_start_date_input_change)
-        self.end_date_input.on_change('value', self.on_end_date_input_change)
-        self.select_tick_btn.on_change('value', self.on_tick_selection_change)
-        self.layout = layout([[self.select_tick_btn,
-                               self.start_date_input,
-                               self.end_date_input],
+        self.start_date.on_change('value', self.on_start_date_input_change)
+        self.end_date.on_change('value', self.on_end_date_input_change)
+        self.select_tick.on_change('value', self.on_tick_selection_change)
+        self.layout = layout([[self.select_tick, self.start_date, self.end_date],
                               [self.plot_layout]])
-
-    def normalize_name(self):
-        self.df.columns = [c.lower().replace(' ', '_') for c in self.df.columns.values]
-        self.df.index.names = [c.lower().replace(' ', '_') for c in self.df.index.names]
 
     def candle_plot(self, ticker, index_name='date'):
         self.df = self.sp500.get_ticker_stocks(ticker, self.start, self.end)
-        self.normalize_name()
+        self.df = plot.normalize_name(self.df)
         self.df = self.df.set_index(index_name)
         index = self.df.index.get_level_values(index_name)
         stock_data = {index_name: index}
 
         for val in self.df.columns.values:
             stock_data[val] = self.df[val]
+        # log.info(stock_data)
 
         source = ColumnDataSource(data=dict(stock_data))
         hover = HoverTool(tooltips=[('date', '@date{%F}'),
@@ -96,12 +110,10 @@ class Market():
         p.xaxis.major_label_orientation = pi / 4
         p.xaxis.axis_label = 'Date'
         p.yaxis.axis_label = 'Price'
-        p.grid.grid_line_alpha = 0.3
 
         p.line(index_name, 'adj_close', color='#A6CEE3', source=source)
         p.line(index_name, 'adj_open', color='#FB9A99', source=source)
         p.segment(index_name, 'high', index_name, 'low', color="white", source=source)
-
         p.vbar(index[inc], w, self.df['open'][inc], self.df['close'][inc],
                fill_color="#D5E1DD", line_color="white")
         p.vbar(index[dec], w, self.df['open'][dec], self.df['close'][dec],
@@ -114,22 +126,23 @@ class Market():
             if key != 'date':
                 columns.append(TableColumn(field=key, title=key))
 
-        data_table = DataTable(source=source, columns=columns, width=1600)
-        layout = column(p, data_table)
-        return layout
+        # Layout
+        return column(p, DataTable(source=source, columns=columns, width=1600))
 
     # CALLBACK
     def on_tick_selection_change(self, attr, old, new):
-        print('old', old, 'new', new)
+        log.debug('VALUE: old {} | new {}'.format(old, new))
         self.layout.children[1] = self.candle_plot(new)
 
     def on_start_date_input_change(self, attr, old, new):
+        log.debug('VALUE: old {} | new {}'.format(old, new))
         self.start = new
-        self.layout.children[1] = self.candle_plot(self.select_tick_btn.value)
+        self.layout.children[1] = self.candle_plot(self.select_tick.value)
 
     def on_end_date_input_change(self, attr, old, new):
+        log.debug('VALUE: old {} | new {}'.format(old, new))
         self.end = new
-        self.layout.children[1] = self.candle_plot(self.select_tick_btn.value)
+        self.layout.children[1] = self.candle_plot(self.select_tick.value)
 
 
 class Twitter:
@@ -138,13 +151,3 @@ class Twitter:
                  start=(date.today() - relativedelta(years=3)),
                  end=date.today()):
         self.twitter = util.twitter.Twitter()
-
-
-def MainWindow():
-    tab1 = Panel(child=Market().layout, title="Market")
-    tab2 = Panel(child=Market().layout, title="Twitter")
-    tabs = Tabs(tabs=[tab1, tab2])
-    return tabs
-
-
-curdoc().add_root(MainWindow())
