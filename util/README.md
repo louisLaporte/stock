@@ -32,7 +32,7 @@ https://apps.twitter.com/
 * Save the twitter API key in the secret directory in a file named twitter_key.json
 
 Your file must follow the syntax below
-````
+```
 {
     "ACCESS_TOKEN_KEY": "YOUR ACCESS TOKEN KEY",
     "ACCESS_TOKEN_SECRET": "YOUT ACCESS TOKEN SECRET",
