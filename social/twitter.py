@@ -9,6 +9,15 @@ import string
 import json
 import operator
 import os
+import logging
+
+log = logging.getLogger(__name__)
+log.setLevel(logging.DEBUG)
+ch = logging.StreamHandler()
+ch.setLevel(logging.INFO)
+formatter = logging.Formatter('[%(name)s][%(levelname)s]%(message)s')
+ch.setFormatter(formatter)
+log.addHandler(ch)
 
 
 class Twitter:
@@ -33,22 +42,51 @@ class Twitter:
         auth.set_access_token(access_token_key, access_token_secret)
         self.api = tweepy.API(auth)
 
-        self.user = self.api.get_user(screen_name=name)
+        user = self.api.get_user(screen_name=name)
 
-        self.account = {}
-        self.account["name"] = self.user.name
-        self.account["user_id"] = self.user.id_str
-        self.account["description"] = self.user.description
-        self.account["lang"] = self.user.lang
-        self.account["account_created_at"] = self.user.created_at
-        self.account["location"] = self.user.location
-        self.account["time_zone"] = self.user.time_zone
-        self.account["number_tweets"] = self.user.statuses_count
-        self.account["number_followers"] = self.user.followers_count
-        self.account["following"] = self.user.friends_count
-        self.account["member_of"] = self.user.listed_count
-        self.account["location"] = self.user.location
-        self.account["tweet"] = {}
+        self.account = dict(
+            name=user.name,
+            user_id=user.id_str,
+            description=user.description,
+            lang=user.lang,
+            account_created_at=user.created_at,
+            location=user.location,
+            time_zone=user.time_zone,
+            number_tweets=user.statuses_count,
+            number_followers=user.followers_count,
+            following=user.friends_count,
+            member_of=user.listed_count,
+            tweet=dict())
+        self.user = user
+
+        # self.tweets = account.get_timeline(account.user.statuses_count)
+        # self.total = 0
+        # self.counter = 0
+        # self.account = account
+
+    def _get_tweets(self):
+        while True:
+
+            for i, tweet in enumerate(self.tweets):
+                log.debug(
+                    "[{}/{}] [{}] {} {}".format(self.counter,
+                                                self.account.user.statuses_count,
+                                                tweet.id,
+                                                tweet.created_at,
+                                                tweet.retweet_count)
+                )
+                self.counter += 1
+                last_id = tweet.id
+                self.total += tweet.retweet_count
+
+            self.tweets = self.account.api.user_timeline(
+                id=self.account.user.id, count=200, max_id=last_id)
+            try:
+                # remove the first because it's the last id
+                self.tweets.pop(0)
+            except IndexError:
+                break
+        print("total retweet:", self.total)
 
     def rate_limit_status(self):
         return self.api.rate_limit_status()
@@ -57,8 +95,8 @@ class Twitter:
         """
         Print account info
         """
-        print("Comapany:", self.account["name"])
-        print("Number of tweets:", self.user.statuses_count)
+        log.info("Comapany:", self.account["name"])
+        log.info("Number of tweets:", self.user.statuses_count)
 
     def extract(self, tweet):
         """
@@ -185,5 +223,5 @@ class Twitter:
         url = "https://twitter.com/{}".format(handle)
         nav = 'ProfileNav-'
         soup = BeautifulSoup(requests.get(url).text, 'html.parser')
-        followers = soup.find('li', {'class': nav + 'item--followers'}).find('span', {'class': nav + 'value'}).text
-        return followers
+        followers = soup.find('li', {'class': nav + 'item--followers'})
+        return followers.find('span', {'class': nav + 'value'}).text
