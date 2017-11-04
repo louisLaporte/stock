@@ -22,16 +22,13 @@ sys.path.append(project_path)
 import core.market
 import util.twitter
 import plot
+
 log = logging.getLogger(__name__)
 log.setLevel(logging.DEBUG)
-
-# create console handler and set level to debug
 ch = logging.StreamHandler()
 ch.setLevel(logging.INFO)
 formatter = logging.Formatter('[%(name)s][%(levelname)s]%(message)s')
-# add formatter to ch
 ch.setFormatter(formatter)
-# add ch to logger
 log.addHandler(ch)
 
 
@@ -67,8 +64,8 @@ class Market():
         # layout
         self.plot_layout = self.candle_plot(symbols[0])
 
-        self.start_date.on_change('value', self.on_start_date_input_change)
-        self.end_date.on_change('value', self.on_end_date_input_change)
+        self.start_date.on_change('value', self.on_start_date_change)
+        self.end_date.on_change('value', self.on_end_date_change)
         self.select_tick.on_change('value', self.on_tick_selection_change)
         self.layout = layout([[self.select_tick, self.start_date, self.end_date],
                               [self.plot_layout]])
@@ -129,17 +126,17 @@ class Market():
         # Layout
         return column(p, DataTable(source=source, columns=columns, width=1600))
 
-    # CALLBACK
+    # Callbacks
     def on_tick_selection_change(self, attr, old, new):
         log.debug('VALUE: old {} | new {}'.format(old, new))
         self.layout.children[1] = self.candle_plot(new)
 
-    def on_start_date_input_change(self, attr, old, new):
+    def on_start_date_change(self, attr, old, new):
         log.debug('VALUE: old {} | new {}'.format(old, new))
         self.start = new
         self.layout.children[1] = self.candle_plot(self.select_tick.value)
 
-    def on_end_date_input_change(self, attr, old, new):
+    def on_end_date_change(self, attr, old, new):
         log.debug('VALUE: old {} | new {}'.format(old, new))
         self.end = new
         self.layout.children[1] = self.candle_plot(self.select_tick.value)
@@ -150,4 +147,4 @@ class Twitter:
     def __init__(self,
                  start=(date.today() - relativedelta(years=3)),
                  end=date.today()):
-        self.twitter = util.twitter.Twitter()
+        pass
