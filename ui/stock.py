@@ -20,7 +20,7 @@ project_path = os.path.realpath(os.path.dirname(__file__) + '/..')
 sys.path.append(project_path)
 
 import core.market
-import util.twitter
+# import social.twitter
 import plot
 
 log = logging.getLogger(__name__)
@@ -53,7 +53,7 @@ class Market():
         self.start = str(start)
         self.end = str(end)
         self.sp500 = core.market.SP500('dataset/tickers.h5')
-        symbols = self.sp500.tickers_store['default']['symbol'].values.tolist()
+        symbols = self.sp500.store['info']['symbol'].values.tolist()
         # log.info("{}".format(symbols))
         # Select tick button
         title = "Company tick"

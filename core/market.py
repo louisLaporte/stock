@@ -2,56 +2,108 @@
 import bs4
 import quandl
 import pandas as pd
+import numpy as np
 import requests
 import os
 import json
-import logging
+import shutil
+import tempfile
+import multiprocessing as mp
 from scrapy.selector import Selector
+import logging
 
 log = logging.getLogger(__name__)
+log.setLevel(logging.INFO)
 ch = logging.StreamHandler()
-ch.setLevel(logging.DEBUG)
-formatter = logging.Formatter('[%(name)s][%(levelname)s]%(message)s')
+formatter = logging.Formatter('[%(name)s][%(levelname)s] %(message)s')
 ch.setFormatter(formatter)
 log.addHandler(ch)
 
-store_file = os.path.realpath(os.path.dirname(__file__) + '/../dataset/sp500.h5')
+PROJECT_PATH = os.path.abspath(os.path.dirname(__file__) + '/..')
+pd.set_option('display.width', os.get_terminal_size().columns)
+pd.set_option('display.colheader_justify', 'left')
 
 
 class SP500:
 
-    def __init__(self, store_file=store_file):
+    def __init__(self, store_file=''):
         """
         Construtor for SP500
 
         Retrieve S&P500's tickers info from wikipedia
+
+        :param store_file: file containing the stored tables
+        :type store_file: str
         """
         self._load_quandl_api_key()
-        if not os.path.exists(store_file):
-            self.store = pd.HDFStore(store_file)
+        self.store_file = PROJECT_PATH + '/dataset/sp500.h5'
+        self.tmp_store = tempfile.NamedTemporaryFile(delete=False, suffix='.h5')
+        log.info("Creating store {}".format(self.tmp_store.name))
+
+        if not os.path.exists(self.store_file):
+            self.store = pd.HDFStore(self.tmp_store.name)
+            self.update_store()
         else:
-            self.store = pd.HDFStore(store_file, mode='r+')
-        log.info(self.store.keys())
-        log.info(self.store)
+            shutil.copyfile(self.store_file, self.tmp_store.name)
+            self.store = pd.HDFStore(self.tmp_store.name)
+        log.info('\n {}'.format(self.store['web']))
 
-        if '/default' not in self.store.keys():
-            self.save_default_info()
-        if '/website' not in self.store.keys():
-            self.save_websites()
-        if '/social' not in self.store.keys():
-            self.save_social_accounts()
+    def __del__(self):
+        log.debug("Moving {} to {}".format(self.tmp_store.name, self.store_file))
+        if not os.path.exists(self.store_file):
+            os.mknod(self.store_file)
 
-    def __exit__(self):
-        self.store.close()
+        shutil.copyfile(self.tmp_store.name, self.store_file)
+        self.tmp_store.close()
+        os.unlink(self.tmp_store.name)
 
-    def get_store(self):
+    @staticmethod
+    def _load_quandl_api_key():
+        with open(PROJECT_PATH + '/secret/quandl_key.json', 'r') as f:
+            api_key = json.load(f)
+        quandl.ApiConfig.api_key = api_key['key']
+
+    def _normalize_table_name(self, table):
+        if not table.startswith("/"):
+            table = "/" + table
+        return table
+
+    def parallelize(self, callback, tname):
         """
-        Get store tables
+        Parallelize tasks to update table
+
+        :param callback: callback nethod
+        :param tname: table name
+        :type table: str
+        :return: queued result
+        :rtype: list
+        """
+        ret = []
+        ret_queue = mp.Queue()
+        cpu_count = mp.cpu_count()
+        df_list = np.array_split(self.store[tname], cpu_count)
+        proc = []
+        for i in range(cpu_count):
+            p = mp.Process(target=callback, args=(df_list[i], ret_queue))
+            proc.append(p)
+            p.start()
+        # Gather results
+        for i in range(cpu_count):
+            ret.append(ret_queue.get())
+            proc[i].join()
+        return ret
+
+    def get_tables_name(self):
+        """
+        Get store tables name
 
         :return: tables name
         :rtype: list
         """
         return self.store.keys()
+
+    def remove_table(self, table):
+        raise NotImplementedError
 
     def get_table(self, table):
         """
@@ -62,11 +114,7 @@ class SP500:
         :return: table info
         :rtype: pandas.DataFrame
         """
-        if not table.startswith("/"):
-            table = "/" + table
-        if table not in self.get_store():
-            raise ValueError("Table {} not found".format(table))
-        return self.store[table]
+        return self.store.get(table)
 
     def get_table_header(self, table):
         """
@@ -77,20 +125,19 @@ class SP500:
         :return: table header
         :rtype: list
         """
-        return self.get_table(table).columns.values
+        return self.get_table(table).columns.values.tolist()
 
     def update_store(self):
-        raise NotImplementedError
+        """
+        Update all tables informations
+        """
+        self.update_info()
+        self.update_websites()
+        self.update_social_accounts()
 
-    @staticmethod
-    def _load_quandl_api_key():
-        with open('../secret/quandl_key.json', 'r') as f:
-            api_key = json.load(f)
-        quandl.ApiConfig.api_key = api_key['key']
-
-    def save_default_info(self):
+    def update_info(self):
         # Find S&P500 info from wikipedia
-        tickers = []
+        companies = []
         wikipedia = []
         wikipedia_url = 'http://en.wikipedia.org'
 
@@ -98,21 +145,25 @@ class SP500:
         resp.raise_for_status()
         soup = bs4.BeautifulSoup(resp.text, 'lxml')
         table = soup.find('table', {'class': 'wikitable sortable'})
-        header = ["symbol", "security_name", "gcis_sector", "gcis_subsector",
-                  "hq_address", "date_added", "cik"]
-        wikipedia_header = ["symbol", "link"]
+        headers = {
+            "companies": [
+                "symbol", "security_name", "gcis_sector", "gcis_subsector",
+                "hq_address", "date_added", "cik"
+            ],
+            "wikipedia": ["symbol", "wikipedia"]
+        }
 
         for row in table.findAll('tr')[1:]:
             cells = row.findAll('td')
-            ticker = [h.text for h in cells if h.text != 'reports']
-            tickers.append(ticker)
+            company = [h.text for h in cells if h.text != 'reports']
+            companies.append(company)
+            # [ticker symbol, wikipedia url]
             wiki = [cells[0].text, wikipedia_url + cells[1].a.get('href')]
             wikipedia.append(wiki)
 
-        wikipedia_df = pd.DataFrame(wikipedia, columns=wikipedia_header)
-        tickers_df = pd.DataFrame(tickers, columns=header)
-        self.store['default'] = tickers_df
-        self.store['wikipedia'] = wikipedia_df
+        self.store['info'] = pd.DataFrame(companies, columns=headers["companies"])
+        self.store['web'] = pd.DataFrame(wikipedia, columns=headers["wikipedia"])
+        log.info("Save info done.")
 
     def get_website(self, symbol):
         """
@@ -123,82 +174,79 @@ class SP500:
         :return: website for the given symbol
         :rtype: str
         """
-        tsw = self.store['website']
-        return tsw[tsw['symbol'] == symbol].loc[0]["link"]
+        tsw = self.store['web']
+        return tsw[tsw['symbol'] == symbol].loc[0]["website"]
 
     def update_websites(self):
-        raise NotImplementedError
-
-    def save_websites(self):
         """
         Save websites url in hdf5 database
         """
-        wiki_df = self.store['wikipedia']
-        header = ["symbol", "link"]
-        websites = []
-        error_symbol = []
-        for idx, row in wiki_df.iterrows():
-            resp = requests.get(row['link'])
-            soup = bs4.BeautifulSoup(resp.text, 'lxml')
-            table = soup.find('table', {'class': 'infobox'})
-            try:
+        def web_worker(df, ret_queue):
+            websites = []
+            for _, row in df.iterrows():
+                resp = requests.get(row['wikipedia'])
+                soup = bs4.BeautifulSoup(resp.text, 'lxml')
+                table = soup.find('table', {'class': 'infobox'})
+                if not hasattr(table, 'findAll'):
+                    log.error("No website found for {}".format(row['symbol']))
+                    websites.append(np.NaN)
+                    continue
                 for r in table.findAll('tr')[1:]:
                     if hasattr(r.th, 'text'):
                         if r.th.text == 'Website':
                             website = r.td.a.get('href')
                             break
-            except AttributeError:
-                error_symbol.append(row['symbol'])
-                continue
-            else:
+                # Clean up url
                 if website.startswith('//'):
                     website = 'http:' + website
-            log.debug(row['symbol'], website)
-            websites.append([row['symbol'], website])
-        website_df = pd.DataFrame(websites, columns=header)
-        self.store['website'] = website_df
-        log.debug("Website error for symbols: {}".format(error_symbol))
+                # NOTE: don't remove after last /
+                # website = "/".join(website.split('/')[:3])
+                websites.append(website)
+                log.info("{:<4} {}".format(row['symbol'], website))
+            ret_queue.put(df.assign(website=websites))
+
+        self.store['web'] = pd.concat(self.parallelize(web_worker, 'web'))
 
     def get_social_account(self, symbol, social_name):
         tsw = self.store['social']
         return tsw[tsw['symbol'] == symbol].loc[0]["twitter_account"]
 
     def update_social_accounts(self):
-        raise NotImplementedError
-
-    def save_social_accounts(self):
         """
         Save social accounts names in hdf5 database
         """
-        website_df = self.store['website']
-        header = ["symbol", "twitter_account"]
-        accounts = []
-        error_symbol = []
-        for idx, row in website_df.iterrows():
-            log.debug(row['link'])
-            try:
-                headers = {'User-Agent': "Mozilla/5.0 (Windows NT 6.1) \
-                    AppleWebKit/537.36 (KHTML, like Gecko) \
-                    Chrome/41.0.2228.0 Safari/537.36"}
-                resp = requests.get(row['link'], verify=True, headers=headers, timeout=15)
-                resp.raise_for_status()
-                response = Selector(text=resp.text, type='html')
-                account = response.xpath(
-                    '//a[re:test(@href, ".*twitter.com/(#!/)?(@)?\w+$")]//@href'
-                )
-                account = account.extract_first()
-                if account:
-                    accounts.append(account)
-            except Exception as err:
-                log.debug(err)
-                error_symbol.append(row['symbol'])
-                continue
-        log.debug(len(accounts))
-        for account in accounts:
-            log.debug(account)
-        social_df = pd.DataFrame(accounts, columns=header)
-        self.store['social'] = social_df
-        log.debug("Website error for symbols: {}".format(error_symbol))
+        def social_worker(df, ret_queue):
+            accounts = {"twitter": []}
+            for _, row in df.iterrows():
+                try:
+                    headers = {
+                        'User-Agent': "Mozilla/5.0 (Windows NT 6.1) \
+                                       AppleWebKit/537.36 (KHTML, like Gecko) \
+                                       Chrome/41.0.2228.0 Safari/537.36"
+                    }
+                    resp = requests.get(
+                        row['website'], verify=True, headers=headers, timeout=15
+                    )
+                    resp.raise_for_status()
+                    response = Selector(text=resp.text, type='html')
+                    twitter_account = response.xpath(
+                        '//a[re:test(@href, ".*twitter.com/(#!/)?(@)?\w+$")]//@href'
+                    )
+                    twitter_account = twitter_account.extract_first()
+                    if twitter_account:
+                        log.info("{:<4} {}".format(row['symbol'], twitter_account))
+                        accounts["twitter"].append(twitter_account)
+                    else:
+                        accounts["twitter"].append(np.NaN)
+                        log.error("No social account found for {}".format(row['symbol']))
+                except Exception as err:
+                    accounts["twitter"].append(np.NaN)
+                    log.error(err)
+                    log.error("No social account found for {}".format(row['symbol']))
+                    continue
+            ret_queue.put(df.assign(twitter=accounts["twitter"]))
+
+        self.store['web'] = pd.concat(self.parallelize(social_worker, 'web'))
 
     def get_sectors(self):
         """
@@ -207,7 +255,7 @@ class SP500:
         :return: list of unique sectors
         :rtype: list
         """
-        return self.store['default']["gics_sector"].unique().tolist()
+        return self.store['info']["gics_sector"].unique().tolist()
 
     def get_tickers_by_sectors(self, sectors):
         """
@@ -220,9 +268,11 @@ class SP500:
         """
         if not isinstance(sectors, list):
             raise TypeError("Sectors must be a list")
+
         if len(set(sectors) & set(self.get_sectors())) != len(sectors):
             raise ValueError("Unknown sectors: {}".format(sectors))
-        tst = self.store['default']
+
+        tst = self.store['info']
         return tst[tst["gics_sector"].isin(sectors)]
 
     def get_tickers_symbol(self):
@@ -232,7 +282,7 @@ class SP500:
         :return: list of unique sectors
         :rtype: list
         """
-        return self.store["default"]["symbol"].tolist()
+        return self.store["info"]["symbol"].tolist()
 
     @staticmethod
     def get_ticker_stocks(ticker, start, end):
