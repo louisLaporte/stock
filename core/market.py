@@ -30,7 +30,8 @@ class SP500:
         """
         Construtor for SP500
 
-        Retrieve S&P500's tickers info from wikipedia
+        Retrieve S&P500's tickers info from wikipedia. During the process data
+        will be handle in a temporary file.
 
         :param store_file: file containing the stored tables
         :type store_file: str
@@ -46,14 +47,15 @@ class SP500:
         else:
             shutil.copyfile(self.store_file, self.tmp_store.name)
             self.store = pd.HDFStore(self.tmp_store.name)
-        log.info('\n {}'.format(self.store['web']))
 
     def __del__(self):
         log.debug("Moving {} to {}".format(self.tmp_store.name, self.store_file))
         if not os.path.exists(self.store_file):
             os.mknod(self.store_file)
-
-        shutil.copyfile(self.tmp_store.name, self.store_file)
+        try:
+            shutil.copyfile(self.tmp_store.name, self.store_file)
+        except NameError:
+            pass
         self.tmp_store.close()
         os.unlink(self.tmp_store.name)
 
@@ -70,9 +72,12 @@ class SP500:
 
     def parallelize(self, callback, tname):
         """
-        Parallelize tasks to update table
+        Parallelize tasks to update table.
 
-        :param callback: callback nethod
+        The callback must have 2 argument (list of dataframes, queue of return
+        values.
+
+        :param callback: callback method
         :param tname: table name
         :type table: str
         :return: queued result
@@ -80,16 +85,18 @@ class SP500:
         """
         ret = []
         ret_queue = mp.Queue()
-        cpu_count = mp.cpu_count()
+        cpu_count = mp.cpu_count() * 2
         df_list = np.array_split(self.store[tname], cpu_count)
         proc = []
         for i in range(cpu_count):
             p = mp.Process(target=callback, args=(df_list[i], ret_queue))
+            log.info("Starting process {}".format(p))
             proc.append(p)
             p.start()
         # Gather results
         for i in range(cpu_count):
             ret.append(ret_queue.get())
+            log.info("Joining process {}".format(p))
             proc[i].join()
         return ret
 
@@ -127,6 +134,15 @@ class SP500:
         """
         return self.get_table(table).columns.values.tolist()
 
+    def update_table(self, tname):
+        if tname == 'info':
+            self.update_info()
+        elif tname == 'web':
+            self.update_websites()
+            self.update_social_accounts()
+        else:
+            raise KeyError("Table {} not found".format(tname))
+
     def update_store(self):
         """
         Update all tables informations
@@ -135,16 +151,34 @@ class SP500:
         self.update_websites()
         self.update_social_accounts()
 
-    def update_info(self):
+    def _request(self, url, res_type='bs4'):
+        headers = {
+            'User-Agent': "Mozilla/5.0 (Windows NT 6.1) \
+                           AppleWebKit/537.36 (KHTML, like Gecko) \
+                           Chrome/41.0.2228.0 Safari/537.36"
+        }
+        try:
+            resp = requests.get(url, verify=True, headers=headers, timeout=15)
+            resp.raise_for_status()
+            if res_type == 'bs4':
+                return bs4.BeautifulSoup(resp.text, 'lxml')
+            elif res_type == 'selector':
+                return Selector(text=resp.text, type='html')
+            else:
+                log.error('Not a valid response type')
+                return
+        except Exception as err:
+            log.error(err)
+            return
+
+    def update_info(self, condition=None):
         # Find S&P500 info from wikipedia
         companies = []
         wikipedia = []
         wikipedia_url = 'http://en.wikipedia.org'
 
-        resp = requests.get(wikipedia_url + '/wiki/List_of_S%26P_500_companies')
-        resp.raise_for_status()
-        soup = bs4.BeautifulSoup(resp.text, 'lxml')
-        table = soup.find('table', {'class': 'wikitable sortable'})
+        resp = self._request(wikipedia_url + '/wiki/List_of_S%26P_500_companies')
+        table = resp.find('table', {'class': 'wikitable sortable'})
         headers = {
             "companies": [
                 "symbol", "security_name", "gcis_sector", "gcis_subsector",
@@ -163,7 +197,7 @@ class SP500:
 
         self.store['info'] = pd.DataFrame(companies, columns=headers["companies"])
         self.store['web'] = pd.DataFrame(wikipedia, columns=headers["wikipedia"])
-        log.info("Save info done.")
+        log.info("Info updated.")
 
     def get_website(self, symbol):
         """
@@ -184,22 +218,23 @@ class SP500:
         def web_worker(df, ret_queue):
             websites = []
             for _, row in df.iterrows():
-                resp = requests.get(row['wikipedia'])
-                soup = bs4.BeautifulSoup(resp.text, 'lxml')
-                table = soup.find('table', {'class': 'infobox'})
-                if not hasattr(table, 'findAll'):
-                    log.error("No website found for {}".format(row['symbol']))
+                resp = self._request(row['wikipedia'])
+                if not resp:
                     websites.append(np.NaN)
+                    log.error("No website found for {}".format(row['symbol']))
                     continue
+                table = resp.find('table', {'class': 'infobox'})
                 for r in table.findAll('tr')[1:]:
                     if hasattr(r.th, 'text'):
                         if r.th.text == 'Website':
                             website = r.td.a.get('href')
                             break
+                else:
+                    website = np.NaN
                 # Clean up url
                 if website.startswith('//'):
                     website = 'http:' + website
-                # NOTE: don't remove after last /
+                # NOTE: don't remove after last /, the full url is needed
                 # website = "/".join(website.split('/')[:3])
                 websites.append(website)
                 log.info("{:<4} {}".format(row['symbol'], website))
@@ -218,24 +253,19 @@ class SP500:
         def social_worker(df, ret_queue):
             accounts = {"twitter": []}
             for _, row in df.iterrows():
+                resp = self._request(row['website'], res_type='selector')
+                if not resp:
+                    log.error("No response")
+                    accounts["twitter"].append(np.NaN)
+                    continue
                 try:
-                    headers = {
-                        'User-Agent': "Mozilla/5.0 (Windows NT 6.1) \
-                                       AppleWebKit/537.36 (KHTML, like Gecko) \
-                                       Chrome/41.0.2228.0 Safari/537.36"
-                    }
-                    resp = requests.get(
-                        row['website'], verify=True, headers=headers, timeout=15
-                    )
-                    resp.raise_for_status()
-                    response = Selector(text=resp.text, type='html')
-                    twitter_account = response.xpath(
+                    twitter_account = resp.xpath(
                         '//a[re:test(@href, ".*twitter.com/(#!/)?(@)?\w+$")]//@href'
                     )
                     twitter_account = twitter_account.extract_first()
                     if twitter_account:
-                        log.info("{:<4} {}".format(row['symbol'], twitter_account))
                         accounts["twitter"].append(twitter_account)
+                        log.info("{:<4} {}".format(row['symbol'], twitter_account))
                     else:
                         accounts["twitter"].append(np.NaN)
                         log.error("No social account found for {}".format(row['symbol']))
