@@ -31,9 +31,6 @@ def update_store(args):
 
 sp500 = core.market.SP500()
 
-help_msg = '''
-    update  update a table
-'''
 parser = argparse.ArgumentParser(description='S&P500 utility.')
 sp = parser.add_subparsers(help='sub-command help')
 
