@@ -9,12 +9,16 @@ sys.path.append(project_path)
 import core.market
 
 
-def print_table(args):
+def show_table(args):
     try:
         print(sp500.get_table(args.name))
     except KeyError:
         print("Table {} not found".format(args.name))
         sys.exit(1)
+
+
+def show_where(args):
+    print(sp500.get_row(args.fields))
 
 
 def update_table(args):
@@ -29,10 +33,30 @@ def update_store(args):
     sp500.update_store()
 
 
+def list_store(args):
+    print(sp500.get_store_tables())
+
+
+def list_table(args):
+    try:
+        print(sp500.get_table_header(args.name))
+    except KeyError:
+        print("Table {} not found".format(args.name))
+        sys.exit(1)
+
+
 sp500 = core.market.SP500()
 
 parser = argparse.ArgumentParser(description='S&P500 utility.')
 sp = parser.add_subparsers(help='sub-command help')
+
+list_parser = sp.add_parser('list')
+list_sp = list_parser.add_subparsers()
+list_store_parser = list_sp.add_parser('store', help="List tables in store")
+list_store_parser.set_defaults(func=list_store)
+list_table_parser = list_sp.add_parser('table', help="List table columns")
+list_table_parser.add_argument('name', type=str, help='Table name without (/)')
+list_table_parser.set_defaults(func=list_table)
 
 update_parser = sp.add_parser('update')
 update_sp = update_parser.add_subparsers()
@@ -46,7 +70,10 @@ show_parser = sp.add_parser('show')
 show_sp = show_parser.add_subparsers()
 show_table_parser = show_sp.add_parser('table', help="Show table by name")
 show_table_parser.add_argument('name', type=str, help='Table name without (/)')
-show_table_parser.set_defaults(func=print_table)
+show_table_parser.set_defaults(func=show_table)
+show_symbol_parser = show_sp.add_parser('where', help="Show symbol")
+show_symbol_parser.add_argument('fields', type=str, help='Fields match')
+show_symbol_parser.set_defaults(func=show_where)
 
 args = parser.parse_args()
 args.func(args)
