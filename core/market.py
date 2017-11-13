@@ -8,6 +8,7 @@ import os
 import json
 import shutil
 import tempfile
+import re
 import multiprocessing as mp
 from scrapy.selector import Selector
 import logging
@@ -21,7 +22,7 @@ log.addHandler(ch)
 
 PROJECT_PATH = os.path.abspath(os.path.dirname(__file__) + '/..')
 pd.set_option('display.width', os.get_terminal_size().columns)
-pd.set_option('display.colheader_justify', 'left')
+# pd.set_option('display.colheader_justify', 'left')
 
 
 class SP500:
@@ -38,8 +39,8 @@ class SP500:
         """
         self._load_quandl_api_key()
         self.store_file = PROJECT_PATH + '/dataset/sp500.h5'
-        self.tmp_store = tempfile.NamedTemporaryFile(delete=False, suffix='.h5')
-        log.info("Creating store {}".format(self.tmp_store.name))
+        self.tmp_store = tempfile.NamedTemporaryFile(delete=True, suffix='.h5')
+        log.debug("Creating store {}".format(self.tmp_store.name))
 
         if not os.path.exists(self.store_file):
             self.store = pd.HDFStore(self.tmp_store.name)
@@ -57,7 +58,6 @@ class SP500:
         except NameError:
             pass
         self.tmp_store.close()
-        os.unlink(self.tmp_store.name)
 
     @staticmethod
     def _load_quandl_api_key():
@@ -100,9 +100,9 @@ class SP500:
             proc[i].join()
         return ret
 
-    def get_tables_name(self):
+    def get_store_tables(self):
         """
-        Get store tables name
+        Get tables name in store
 
         :return: tables name
         :rtype: list
@@ -241,6 +241,23 @@ class SP500:
             ret_queue.put(df.assign(website=websites))
 
         self.store['web'] = pd.concat(self.parallelize(web_worker, 'web'))
+
+    def get_row(self, regex=None, ignorecase=False):
+        df = None
+        tables = [self.store[table] for table in self.store.keys()]
+        df = pd.merge(*tables, how='outer', on=['symbol'])
+        if ignorecase:
+            r = re.compile(r"{}".format(regex), re.IGNORECASE)
+        else:
+            r = re.compile(r"{}".format(regex))
+        if regex:
+            df = df.astype(str)
+            return df[
+                df.apply(
+                    lambda x: bool([v for v in x.values if r.search(v)]),
+                    axis=1)
+            ]
+        return df
 
     def get_social_account(self, symbol, social_name):
         tsw = self.store['social']
