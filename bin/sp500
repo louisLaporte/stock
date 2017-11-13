@@ -18,7 +18,7 @@ def show_table(args):
 
 
 def show_where(args):
-    print(sp500.get_row(args.fields))
+    print(sp500.get_row(regex=args.fields, ignorecase=args.i))
 
 
 def update_table(args):
@@ -71,9 +71,12 @@ show_sp = show_parser.add_subparsers()
 show_table_parser = show_sp.add_parser('table', help="Show table by name")
 show_table_parser.add_argument('name', type=str, help='Table name without (/)')
 show_table_parser.set_defaults(func=show_table)
-show_symbol_parser = show_sp.add_parser('where', help="Show symbol")
-show_symbol_parser.add_argument('fields', type=str, help='Fields match')
-show_symbol_parser.set_defaults(func=show_where)
+show_where_parser = show_sp.add_parser('where', help="Show symbol")
+show_where_parser.add_argument('fields', type=str,
+                               help='Fields match regular expression')
+show_where_parser.add_argument('-i', action="store_true",
+                               help='ignore case sensitive')
+show_where_parser.set_defaults(func=show_where)
 
 args = parser.parse_args()
 args.func(args)
