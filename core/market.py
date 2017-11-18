@@ -121,7 +121,7 @@ class SP500:
         :return: table info
         :rtype: pandas.DataFrame
         """
-        return self.store.get(table)
+        return self.store.get(table).sort_index()
 
     def get_table_header(self, table):
         """
@@ -302,7 +302,7 @@ class SP500:
         :return: list of unique sectors
         :rtype: list
         """
-        return self.store['info']["gics_sector"].unique().tolist()
+        return self.store['info']["gcis_sector"].unique().tolist()
 
     def get_tickers_by_sectors(self, sectors):
         """
@@ -320,7 +320,7 @@ class SP500:
             raise ValueError("Unknown sectors: {}".format(sectors))
 
         tst = self.store['info']
-        return tst[tst["gics_sector"].isin(sectors)]
+        return tst[tst["gcis_sector"].isin(sectors)]
 
     def get_tickers_symbol(self):
         """
