@@ -1,0 +1,22 @@
+#!/bin/bash
+
+_sp500 ()
+{
+    COMPREPLY=()
+    declare cur=${COMP_WORDS[COMP_CWORD]}
+    declare prev=${COMP_WORDS[COMP_CWORD-1]}
+
+    if [ $COMP_CWORD -eq 1 ]; then
+        COMPREPLY=( $( compgen -W 'list show update' -- $cur ) )
+    elif [ $COMP_CWORD -eq 2 ]; then
+        case "$prev" in
+        "list"|"update")
+            COMPREPLY=( $( compgen -W 'table store' -- $cur ) );;
+        "show")
+            COMPREPLY=( $( compgen -W 'table where' -- $cur ) );;
+        esac
+    fi
+
+    return 0
+}
+
