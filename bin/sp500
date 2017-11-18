@@ -79,4 +79,9 @@ show_where_parser.add_argument('-i', action="store_true",
 show_where_parser.set_defaults(func=show_where)
 
 args = parser.parse_args()
-args.func(args)
+try:
+    args.func(args)
+except AttributeError:
+    print("Invalid argument\n")
+    parser.print_help()
+    sys.exit(1)
