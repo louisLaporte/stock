@@ -1,5 +1,7 @@
-bokeh
-quandl
-pandas
-beautifulsoup4
-apiclient
+bokeh >= 0.12.9
+quandl >= 3.2.0
+pandas >= 0.20.3
+beautifulsoup4 >= 4.6.0
+apiclient >= 1.0.3
+scrapy >= 1.4.0
+tables >= 3.3.0
