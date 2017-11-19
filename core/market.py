@@ -21,7 +21,12 @@ ch.setFormatter(formatter)
 log.addHandler(ch)
 
 PROJECT_PATH = os.path.abspath(os.path.dirname(__file__) + '/..')
-pd.set_option('display.width', os.get_terminal_size().columns)
+
+try:
+    pd.set_option('display.width', os.get_terminal_size().columns)
+except OSError:
+    # When running docker image (Inappropriate ioctl for device)
+    pass
 # pd.set_option('display.colheader_justify', 'left')
 
 
