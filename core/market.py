@@ -12,6 +12,7 @@ import re
 import multiprocessing as mp
 from scrapy.selector import Selector
 import logging
+import atexit
 
 log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
@@ -27,7 +28,16 @@ try:
 except OSError:
     # When running docker image (Inappropriate ioctl for device)
     pass
-# pd.set_option('display.colheader_justify', 'left')
+
+
+def save_dataset(src, dst, store):
+    log.debug("Moving {} to {}".format(src.name, dst))
+    if not os.path.exists(dst):
+        os.mknod(dst)
+    store.close()
+    src.close()
+    shutil.copy2(src.name, dst)
+    os.unlink(src.name)
 
 
 class SP500:
@@ -44,7 +54,7 @@ class SP500:
         """
         self._load_quandl_api_key()
         self.store_file = PROJECT_PATH + '/dataset/sp500.h5'
-        self.tmp_store = tempfile.NamedTemporaryFile(delete=True, suffix='.h5')
+        self.tmp_store = tempfile.NamedTemporaryFile(delete=False, suffix='.h5')
         log.debug("Creating store {}".format(self.tmp_store.name))
 
         if not os.path.exists(self.store_file):
@@ -53,16 +63,8 @@ class SP500:
         else:
             shutil.copyfile(self.store_file, self.tmp_store.name)
             self.store = pd.HDFStore(self.tmp_store.name)
-
-    def __del__(self):
-        log.debug("Moving {} to {}".format(self.tmp_store.name, self.store_file))
-        if not os.path.exists(self.store_file):
-            os.mknod(self.store_file)
-        try:
-            shutil.copyfile(self.tmp_store.name, self.store_file)
-        except NameError:
-            pass
-        self.tmp_store.close()
+        # Saving/update file before deleting class
+        atexit.register(save_dataset, self.tmp_store, self.store_file, self.store)
 
     @staticmethod
     def _load_quandl_api_key():
