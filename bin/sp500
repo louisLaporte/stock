@@ -9,16 +9,36 @@ sys.path.append(project_path)
 import core.market
 
 
-def show_table(args):
-    try:
-        print(sp500.get_table(args.name))
-    except KeyError:
-        print("Table {} not found".format(args.name))
+def format_table(args_format, table):
+    if args_format == 'csv':
+        return table.to_csv(sep='|')
+    elif args_format == 'json':
+        return table.to_json(orient='index')
+    elif args_format == 'html':
+        return table.to_html()
+    else:
+        print('Invalid format')
         sys.exit(1)
 
 
+def show_table(args):
+    try:
+        table = sp500.get_table(args.name)
+    except KeyError:
+        print("Table {} not found".format(args.name))
+        sys.exit(1)
+    if not args.format:
+        print(table)
+    else:
+        print(format_table(args.format, table))
+
+
 def show_where(args):
-    print(sp500.get_row(regex=args.fields, ignorecase=args.i))
+    table = sp500.get_row(regex=args.fields, ignorecase=args.i)
+    if not args.format:
+        print(table)
+    else:
+        print(format_table(args.format, table))
 
 
 def update_table(args):
@@ -67,6 +87,8 @@ update_table_parser.add_argument('name', type=str, help='Table name without (/)'
 update_table_parser.set_defaults(func=update_table)
 
 show_parser = sp.add_parser('show')
+show_parser.add_argument('-f', '--format', type=str,
+                         help='Supported formats are csv, html and json')
 show_sp = show_parser.add_subparsers()
 show_table_parser = show_sp.add_parser('table', help="Show table by name")
 show_table_parser.add_argument('name', type=str, help='Table name without (/)')
